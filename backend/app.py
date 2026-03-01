@@ -15,13 +15,30 @@ while True:
         if choice == "1":
             if system.job is None:
                 system.job = JobDescription()
-            system.job.insert_text()
+            
+            print("\nPaste the Job Description text below (end with empty line):")
+            lines = []
+            while True:
+                line = input()
+                if not line.strip():
+                    break
+                lines.append(line)
+            
+            raw_text = " ".join(lines)
+            system.job.process_text(raw_text)
 
         elif choice == "2":
-            system.insert_resumes()
+           print("\nEnter path(s) to PDF resume(s), separated by commas:")
+           paths = input().split(",")
+           paths = [p.strip() for p in paths if p.strip()]
+           system.process_resumes(paths)
 
         elif choice == "3":
-            system.calculate_scores()
+            try:
+                ranked = system.calculate_scores()
+                print("Scoring complete.")
+            except Exception as e:
+                print(e)
 
         elif choice == "4":
             system.show_sorted_results()

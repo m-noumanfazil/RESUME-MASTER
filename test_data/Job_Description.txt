@@ -1,0 +1,14 @@
+Job Title: Senior DevOps Engineer
+Requirements:
+- Minimum 3 years of professional experience.
+- Expertise in Python, Go, Terraform, Airflow, PostgreSQL, Redis, Docker, Microservices, CI/CD.
+- Experience with AWS and GCP cloud platforms.
+- Knowledge of containerized deployments and pipeline orchestration.
+
+
+Job Title: Cloud Automation Engineer
+Requirements:
+- Minimum 2 years of professional experience.
+- Proficient in Python, Docker, Kubernetes, AWS Lambda, CI/CD.
+- Familiarity with event-driven architecture.
+- Ability to assist in microservices deployment and cloud workflow orchestration.
