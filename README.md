@@ -1,4 +1,4 @@
-# 🧠 Transparent Skill-Based Resume Ranking System
+# 🧠 Transparent Skill-Based Resume Ranking System (KAABIL-LENS)
 
 > Explainable 70/30 weighted candidate evaluation — deterministic & no black-box AI
 
