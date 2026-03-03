@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 
 # Environment files
-.env
+env/
+venv/

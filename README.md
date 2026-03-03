@@ -167,46 +167,80 @@ Each candidate includes an expandable section for:
 
 ---
 
-## 🚀 How to Run
+# 🚀 How to Run
 
-1. **Navigate to the project directory:**
+1. **Clone the project and navigate to the directory:**
 
+   ```bash
+   git clone https://github.com/yourusername/resume-ranking-system.git
+   cd resume-ranking-system
+   ```
 
-2. **Run the project:**
+2. **Set up a virtual environment (venv):**
+
+   ```bash
+   python -m venv venv
+   ```
+
+   * Activate the environment:
+
+     * **Linux/macOS:**
+
+       ```bash
+       source venv/bin/activate
+       ```
+     * **Windows:**
+
+       ```bash
+       venv\Scripts\activate
+       ```
+   * Install dependencies:
+
+     ```bash
+     pip install -r requirements.txt
+     cd frontend
+     npm install
+     ```
+
+3. **Set up GROQ AI account and API key:**
+
+   * Go to [GROQ AI](https://groq.ai) and create a free account.
+   * In the dashboard, generate a new API key.
+   * Copy the key.
+
+4. **Configure `.env` file:**
+
+   * In the project root, create a `.env` file (or edit existing one).
+   * Add the following line:
+
+     ```env
+     GROQ_API_KEY=your_copied_api_key_here
+     ```
+
+5. **Run the project (backend + frontend together):**
+
    ```bash
    python run.py
    ```
 
-   This will start both the backend (FastAPI) and frontend (Next.js) servers.
+   * Frontend(Main) → [http://localhost:3000](http://localhost:3000)
+   * Backend API → [http://localhost:8000](http://localhost:8000)
 
+6. **Optional: Run frontend and backend separately:**
 
-3. **Access the application:**
-   - Frontend(main): http://localhost:3000
-   - Backend API: http://localhost:8000
-4. **Optionals:**
-   ---
-   If you want to run frontend and backend seperately.
+   **Backend only:**
 
-   Run this for backend:
    ```bash
    cd backend
-   ```
-   Then:
-   ```bash
    uvicorn backend_api:app --reload
    ```
 
-   Run this for frontend:
+   **Frontend only:**
+
    ```bash
    cd frontend
-   ```
-   Then:
-   ```bash
    npm run dev
    ```
-   ---
-
----
 
 ## ⚡ How This Project Makes a Difference
 
