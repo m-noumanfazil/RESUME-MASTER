@@ -1,5 +1,5 @@
 
-# 🧠 Transparent Skill-Based Resume Ranking System
+# 🧠 KAABIL LENS (Intelligent Resume Screening & Candidate Ranking)
 
 > Explainable 70/30 weighted candidate evaluation — deterministic & no black-box AI
 
@@ -73,13 +73,13 @@ flowchart TD
 ## ⚙ Implementation Highlights
 
 * **Backend:** Python classes handle job description parsing, resume parsing, scoring, and ranking.
-* **Frontend:** Streamlit app with multi-step pages:
+* **Frontend:** Next.js app with modern React components:
 
   1. Job description input & analysis
   2. Resume upload & processing
   3. Candidate ranking results with CSV download
 * **Skill Normalization:** Canonical mapping and regex-based cleaning for consistent comparisons.
-* **Session Management:** Streamlit `session_state` ensures multi-step workflow is preserved without loss of data.
+* **Session Management:** React state and API calls for multi-step workflow.
 * **CSV Export:** Pandas DataFrame converts ranked candidates into downloadable CSVs.
 
 ---
@@ -98,13 +98,13 @@ flowchart TD
 
 3. **Frontend Integration**
 
-   * Maintaining multi-step flow in Streamlit while keeping data persistent.
-   * Solution: Used `st.session_state` for job data, uploaded resumes, and processed results.
+   * Maintaining multi-step flow in Next.js while keeping data persistent.
+   * Solution: Used React state and API calls for job data, uploaded resumes, and processed results.
 
 4. **Loading Feedback for Users**
 
    * Processing multiple PDFs can take time.
-   * Solution: Added Streamlit spinners for extraction, analysis, and scoring stages.
+   * Solution: Added loading spinners for extraction, analysis, and scoring stages.
 
 5. **Deterministic Tie-Breaking**
 
@@ -115,7 +115,7 @@ flowchart TD
 
 ## 🏗 Features Implemented
 
-* Multi-step Streamlit frontend:
+* Multi-step Next.js frontend:
 
   * Step 1: Job description input & skill extraction
   * Step 2: Resume upload & processing
@@ -125,7 +125,7 @@ flowchart TD
 * Deterministic ranking
 * Skill gap detection (missing skills per candidate)
 * CSV export for HR reporting
-* Session management & reset functionality
+* State management & reset functionality
 * Loading animations during backend processing
 
 ---
@@ -159,11 +159,52 @@ Each candidate includes an expandable section for:
 
 ## 🛠 Tech Stack
 
-* **Frontend:** Streamlit
-* **Backend:** Python
+* **Frontend:** Next.js with React
+* **Backend:** Python with FastAPI
 * **PDF Parsing:** PyMuPDF (fitz)
 * **Data Handling:** Pandas
 * **Optional AI Assistance:** Groq API for skill/experience extraction
+
+---
+
+## 🚀 How to Run
+
+1. **Navigate to the project directory:**
+
+
+2. **Run the project:**
+   ```bash
+   python run.py
+   ```
+
+   This will start both the backend (FastAPI) and frontend (Next.js) servers.
+
+
+3. **Access the application:**
+   - Frontend(main): http://localhost:3000
+   - Backend API: http://localhost:8000
+4. **Optionals:**
+   ---
+   If you want to run frontend and backend seperately.
+
+   Run this for backend:
+   ```bash
+   cd backend
+   ```
+   Then:
+   ```bash
+   uvicorn backend_api:app --reload
+   ```
+
+   Run this for frontend:
+   ```bash
+   cd frontend
+   ```
+   Then:
+   ```bash
+   npm run dev
+   ```
+   ---
 
 ---
 
@@ -186,7 +227,9 @@ This system removes manual bias, ensures transparency, and reduces evaluation ti
 git clone https://github.com/yourusername/resume-ranking-system.git
 cd resume-ranking-system
 pip install -r requirements.txt
-streamlit run app.py
+
+# Run the application
+python run.py
 ```
 
 ---
@@ -195,9 +238,9 @@ streamlit run app.py
 
 * Semantic NLP for skill extraction
 * PDF skill gap report generation
-* REST API + Docker deployment
+* Docker deployment with docker-compose
 * Database integration for larger candidate pools
-* Advanced UI/UX with React/Next.js frontend
+* Advanced UI/UX enhancements
 
 ---
 

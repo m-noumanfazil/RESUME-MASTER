@@ -1,0 +1,4 @@
+Rank,Candidate,Skill Match (%),Experience Match (%),Final Score,Matched Skills,Missing Skills
+"1","temp_Carol_Lee.pdf","35.7","50","40","python, go, rest apis, docker, postgresql","ai/ml workflows, oop, data structures, software design patterns, milvus, async programming, fastapi, pinecone, linux"
+"2","temp_Bob_Smith.pdf","21.4","76","37.8","python, docker, go","ai/ml workflows, oop, data structures, async programming, rest apis, milvus, software design patterns, fastapi, pinecone, linux, postgresql"
+"3","temp_Alice_Johson.pdf","21.4","30","24","linux, python, docker","ai/ml workflows, oop, go, async programming, rest apis, milvus, software design patterns, data structures, fastapi, pinecone, postgresql"

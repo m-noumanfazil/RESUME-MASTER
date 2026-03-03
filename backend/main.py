@@ -1,192 +1,558 @@
-import streamlit as st
-from classes import ResumeRankingSystem, JobDescription
+#stresmlit testing main.py
+# classes.py
+# classes.py
+# classes.py
+# classes.py
 import os
-import pandas as pd
+import re
+from groq import Groq
+from dotenv import load_dotenv
+import json
+import fitz
+# load variables from .env file
+load_dotenv()
 
-# ---------------------------
-# Session State Initialization
-# ---------------------------
-if "current_page" not in st.session_state:
-    st.session_state.current_page = "hero"  # hero, jd_upload, results
+CANONICAL_MAP = {
+    "ml": "machine learning",
+    "ai": "artificial intelligence",
+    "react js": "react",
+    "reactjs": "react",
+    "node js": "nodejs",
+    "js": "javascript",
+    "py": "python"
+}
 
-if "system" not in st.session_state:
-    st.session_state.system = ResumeRankingSystem()
+def normalize_skill(skill):
+    skill = skill.lower().strip()
 
-if "job_processed" not in st.session_state:
-    st.session_state.job_processed = False
+    # Remove dots (node.js → nodejs)
+    skill = skill.replace(".", "")
 
-if "jd_text_saved" not in st.session_state:
-    st.session_state.jd_text_saved = ""
+    # Remove commas
+    skill = skill.replace(",", "")
 
-if "resumes_analyzed" not in st.session_state:
-    st.session_state.resumes_analyzed = False
+    # Remove hyphens (react-js → react js)
+    skill = skill.replace("-", " ")
 
-# ---------------------------
-# SIDEBAR RESET CONTROL
-# ---------------------------
-with st.sidebar:
-    st.title("Control Panel")
-    if st.button("🔄 Reset Application"):
-        st.session_state.current_page = "hero"
-        st.session_state.job_processed = False
-        st.session_state.jd_text_saved = ""
-        st.session_state.resumes_analyzed = False
-        st.session_state.system = ResumeRankingSystem()
-        st.rerun()
+    # Collapse multiple spaces
+    skill = re.sub(r"\s+", " ", skill)
 
-# ---------------------------
-# HERO PAGE
-# ---------------------------
-if st.session_state.current_page == "hero":
-    st.title("Transparent Skill-Based Resume Ranking System")
-    st.subheader("Explainable 70/30 weighted candidate evaluation — No Black Box AI")
+    # Fix common spacing issues around symbols
+    skill = skill.replace(" + +", "++")
+    skill = skill.replace(" #", "#")
 
-    if st.button("🚀 Get Started"):
-        st.session_state.current_page = "jd_upload"
-        st.rerun()
+    return skill
 
-# ---------------------------
-# JOB DESCRIPTION + RESUME PAGE
-# ---------------------------
-elif st.session_state.current_page == "jd_upload":
+def canonicalize_skill(skill):
+    if skill in CANONICAL_MAP:
+        return CANONICAL_MAP[skill]
+    return skill
 
-    # Step 1: Job Description Input
-    st.header("Step 1: Enter Job Description")
-    st.divider()
+class JobDescription:
+    def __init__(self):
+        self.skills = []
+        self.required_experience = 0.0
+        self.raw_text = ""
+        self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-    jd_text = st.text_area(
-        "Paste the Job Description below:",
-        value=st.session_state.jd_text_saved,
-        height=220,
-        disabled=st.session_state.job_processed  # Lock after processing
-    )
+    # Backend-only function: just process whatever text is passed
+    def process_text(self, raw_text: str):
+        self.raw_text = raw_text.strip()
+        if not self.raw_text:
+            print("❌ No Job Description text provided.")
+            self.skills = []
+            self.required_experience = 0.0
+            return
 
-    col1, col2 = st.columns([1, 1])
+        prompt = f"""
+        You are a strict data extraction engine.
+        
+        Extract ONLY:
+        1. A list of required technical skills.
+        2. Total required professional experience in years (decimal allowed).
+        
+        Return ONLY valid JSON.
+        No explanation.
+        No markdown.
+        No extra text.
+        
+        Format exactly like this:
+        {{
+          "skills": ["skill1", "skill2"],
+          "experience_years": 3.0 
+        }}
+        
+        If experience is not mentioned, return 0.0.
+        If no skills found, return an empty list.
+        
+        Job Description:
+        \"\"\"{self.raw_text}\"\"\"
+        """
 
-    with col1:
-        if not st.session_state.job_processed:
-            if st.button("Analyze Job Description"):
-                if jd_text.strip() == "":
-                    st.error("Please enter a job description.")
-                else:
-                    st.session_state.system.job = JobDescription()
-                    with st.spinner("Extracting required skills and experience..."):
-                        st.session_state.system.job.process_text(jd_text)
+        try:
+            response = self.client.chat.completions.create(
+                model="qwen/qwen3-32b",
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": "You extract structured job requirement information."},
+                    {"role": "user", "content": prompt}
+                ],
+                reasoning_effort="none"
+            )
 
-                    st.session_state.jd_text_saved = jd_text
-                    st.session_state.job_processed = True
-                    st.rerun()
+            output_text = response.choices[0].message.content.strip()
+            result = json.loads(output_text)
 
-    with col2:
-        if st.session_state.job_processed:
-            if st.button("Edit Job Description"):
-                st.session_state.job_processed = False
-                st.session_state.system.job = None
-                st.rerun()
+            skills = result.get("skills", [])
+            experience = result.get("experience_years", 0)
 
-    # Display Extracted Requirements
-    if st.session_state.job_processed:
-        job = st.session_state.system.job
-        st.success("Job Description processed successfully!")
-        st.subheader("Extracted Requirements")
-        skills_line = ", ".join(job.skills) if job.skills else "None detected"
-        st.write(f"**Required Skills:** {skills_line}")
-        st.write(f"**Required Experience:** {job.required_experience} years")
+            if not isinstance(skills, list):
+                skills = []
 
-        # Step 2: Resume Upload
-        st.divider()
-        st.header("Step 2: Upload Resumes & Analyze")
-        uploaded_files = st.file_uploader(
-            "Upload candidate resumes (PDF only)",
-            type=["pdf"],
-            accept_multiple_files=True
-        )
+            if not isinstance(experience, (int, float)):
+                experience = 0
 
-        if uploaded_files:
-            st.write(f"{len(uploaded_files)} file(s) uploaded:")
-            for f in uploaded_files:
-                st.write(f"- {f.name}")
+            self.skills = [canonicalize_skill(normalize_skill(s)) for s in skills]
+            self.required_experience = round(float(experience), 1)
 
-            if st.button("📊 Analyze Resumes"):
-                st.session_state.system.resumes = []
+            print("✅ Job Description processed successfully!")
+            print("Extracted skills:", self.skills)
+            print("Required experience (years):", self.required_experience)
 
-                with st.spinner("Processing resumes and scoring..."):
-                    for file in uploaded_files:
-                        try:
-                            temp_path = f"temp_{file.name}"
-                            with open(temp_path, "wb") as f_temp:
-                                f_temp.write(file.getbuffer())
+        except Exception as e:
+            print("❌ Error processing Job Description:", str(e))
+            self.skills = []
+            self.required_experience = 0
+       
 
-                            st.session_state.system.process_resumes([temp_path])
-                            os.remove(temp_path)
-                        except Exception as e:
-                            st.error(f"❌ Error processing {file.name}: {e}")
-                            continue
+class Resume:
+    def __init__(self, name, skills, experience):
+        self.name = name
+        self.skills = skills
+        self.experience = experience
+        self.score = 0.0
+        self.skill_match_pct = 0.0  # initialize
+        self.exp_score_pct = 0.0    # initialize
+        # NEW: transparency fields
+        self.matched_skills = []
+        self.missing_skills = []
 
-                    try:
-                        st.session_state.system.calculate_scores()
-                        st.session_state.resumes_analyzed = True  # <- flag set here
-                    except Exception as e:
-                        st.error(f"❌ Scoring failed: {e}")
-                        st.stop()
-
-                st.success("✅ Resumes processed and scored successfully!")
-
-# ---------------------------
-# BUTTON TO RESULTS PAGE
-# ---------------------------
-    if st.session_state.resumes_analyzed:
-        if st.button("➡️ Show Ranked Candidates"):
-            st.session_state.current_page = "results"
-            st.rerun()
+class ResumeRankingSystem:
+    def __init__(self):
+        self.job = None
+        self.resumes = []
+    def process_resumes(self, paths: list):
+        if self.job is None:
+            print("❌ Please insert a Job Description first!")
+            return
     
-# ---------------------------
-# RESULTS PAGE
-# ---------------------------
-elif st.session_state.current_page == "results":
+        if not paths:
+            print("❌ No valid paths entered.")
+            return
+    
+        for path in paths:
+            if not os.path.isfile(path):
+                print(f"❌ File not found: {path}")
+                continue
+        
+            try:
+                # Extract text from PDF
+                doc = fitz.open(path)
+                text = ""
+                for page in doc:
+                    text += page.get_text()
+                doc.close()
+        
+                # Clean text
+                text_clean = re.sub(r'\s+', ' ', text).strip()
+        
+                prompt = f"""
+                        Extract ONLY:
+                        1. All technical skills (from Skills section and project tools mentioned in the resume).
+                        2. Total professional experience in years (decimal allowed, e.g., 2.5 for 2 years 6 months).
+                        
+                        Return ONLY valid JSON in this exact format:
+                        {{
+                            "skills": ["skill1", "skill2"],
+                            "experience_years": 0.0
+                        }}
+                        
+                        NO explanations, NO markdown, NO extra text, NO thoughts.
+                        
+                        Resume text:
+                    \"\"\"{text_clean}\"\"\"
+                    """
+        
+                response = self.job.client.chat.completions.create(
+                    model="qwen/qwen3-32b",
+                    temperature=0,
+                    messages=[
+                        {"role": "system", "content": "Extract structured resume info."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    reasoning_effort="none"
+                )
+        
+                output_text = response.choices[0].message.content.strip()
+        
+                output_text = re.sub(r"<think>.*?</think>", "", output_text, flags=re.DOTALL).strip()
+        
+                if not output_text.startswith("{"):
+                    raise ValueError("AI output is not valid JSON. Check the model response.")
+        
+                result = json.loads(output_text)
+        
+                skills = [canonicalize_skill(normalize_skill(s)) for s in result.get("skills", [])]
+                experience = result.get("experience_years", 0)
+                try:
+                    experience = round(float(experience), 1)
+                except:
+                    experience = 0.0
+        
+                resume_name = os.path.basename(path)
+                self.resumes.append(
+                    Resume(name=resume_name, skills=skills, experience=experience)
+                )
+        
+                print(f"✅ Processed: {resume_name}")
+                print(f"   Skills: {skills}")
+                print(f"   Experience: {experience} years")
+        
+            except Exception as e:
+                print(f"❌ Error processing {path}: {e}")
+    # Inside ResumeRankingSystem class
 
-    st.header("Step 3: Ranked Candidates")
-    st.divider()
-
-    if not st.session_state.system.resumes:
-        st.warning("No resumes available. Go back and upload resumes first.")
-    else:
-        # Prepare table data
-        rows = []
-        for i, r in enumerate(st.session_state.system.resumes, start=1):
-            rows.append({
-                "Rank": i,
-                "Candidate": r.name,
-                "Skill Match (%)": r.skill_match_pct,
-                "Experience Match (%)": r.exp_score_pct,
-                "Final Score": r.score,
-                "Matched Skills": ", ".join(r.matched_skills),
-                "Missing Skills": ", ".join(r.missing_skills)
-            })
-        df = pd.DataFrame(rows)
-
-        # Show main ranking table
-        st.subheader("Top Candidates")
-        st.dataframe(
-            df[["Rank", "Candidate", "Skill Match (%)", "Experience Match (%)", "Final Score"]],
-            use_container_width=True
+    def calculate_scores(self):
+        if self.job is None:
+            raise ValueError("Please insert a Job Description first!")
+    
+        if not self.resumes:
+            raise ValueError("No resumes to score!")
+    
+        for resume in self.resumes:
+            required_skills = set(self.job.skills)
+            candidate_skills = set(resume.skills)
+            
+            matched_skills = required_skills.intersection(candidate_skills)
+            missing_skills = required_skills - matched_skills
+            
+            skill_match_pct = (
+                len(matched_skills) / len(required_skills) * 100
+                if required_skills else 0
+            )
+    
+            if self.job.required_experience > 0:
+                exp_ratio = resume.experience / self.job.required_experience
+                exp_score_pct = min(exp_ratio * 100, 100)
+            else:
+                exp_score_pct = 0.0
+    
+            final_score = skill_match_pct * 0.7 + exp_score_pct * 0.3
+    
+            resume.skill_match_pct = round(skill_match_pct, 1)
+            resume.exp_score_pct = round(exp_score_pct, 1)
+            resume.score = round(final_score, 1)
+    
+            resume.matched_skills = list(matched_skills)
+            resume.missing_skills = list(missing_skills)
+    
+        self.resumes.sort(
+            key=lambda r: (r.score, r.skill_match_pct, r.exp_score_pct),
+            reverse=True
         )
+    
+        return self.resumes
+    
+    def show_sorted_results(self):
+        if not self.resumes:
+            print("❌ No resumes to display!")
+            return
+    
+        print("\n--- Ranked Candidates ---")
+        for i, r in enumerate(self.resumes):
+            print(f"{i+1}. {r.name} | Final Score: {r.score} | Skill Match: {r.skill_match_pct}% | Experience: {r.exp_score_pct}%")
+            print(f"   Matched Skills: {r.matched_skills}")
+            print(f"   Missing Skills: {r.missing_skills}")
+        
+    def reset_system(self):
+        self.job = None
+        self.resumes = []
+        print("✅ System reset: Job Description and all resumes cleared.")# classes.py
+# classes.py
+# classes.py
+# classes.py
+import os
+import re
+from groq import Groq
+from dotenv import load_dotenv
+import json
+import fitz
+# load variables from .env file
+load_dotenv()
 
-        # Detailed expanders
-        st.subheader("Candidate Skill Details")
-        for i, r in enumerate(st.session_state.system.resumes, start=1):
-            with st.expander(f"{i}. {r.name} - Details"):
-                st.write(f"**Matched Skills:** {', '.join(r.matched_skills) if r.matched_skills else 'None'}")
-                st.write(f"**Missing Skills:** {', '.join(r.missing_skills) if r.missing_skills else 'None'}")
+CANONICAL_MAP = {
+    "ml": "machine learning",
+    "ai": "artificial intelligence",
+    "react js": "react",
+    "reactjs": "react",
+    "node js": "nodejs",
+    "js": "javascript",
+    "py": "python"
+}
 
-        # CSV Download
-        csv = df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download CSV of Ranked Candidates",
-            data=csv,
-            file_name="ranked_candidates.csv",
-            mime="text/csv"
+def normalize_skill(skill):
+    skill = skill.lower().strip()
+
+    # Remove dots (node.js → nodejs)
+    skill = skill.replace(".", "")
+
+    # Remove commas
+    skill = skill.replace(",", "")
+
+    # Remove hyphens (react-js → react js)
+    skill = skill.replace("-", " ")
+
+    # Collapse multiple spaces
+    skill = re.sub(r"\s+", " ", skill)
+
+    # Fix common spacing issues around symbols
+    skill = skill.replace(" + +", "++")
+    skill = skill.replace(" #", "#")
+
+    return skill
+
+def canonicalize_skill(skill):
+    if skill in CANONICAL_MAP:
+        return CANONICAL_MAP[skill]
+    return skill
+
+class JobDescription:
+    def __init__(self):
+        self.skills = []
+        self.required_experience = 0.0
+        self.raw_text = ""
+        self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+    # Backend-only function: just process whatever text is passed
+    def process_text(self, raw_text: str):
+        self.raw_text = raw_text.strip()
+        if not self.raw_text:
+            print("❌ No Job Description text provided.")
+            self.skills = []
+            self.required_experience = 0.0
+            return
+
+        prompt = f"""
+        You are a strict data extraction engine.
+        
+        Extract ONLY:
+        1. A list of required technical skills.
+        2. Total required professional experience in years (decimal allowed).
+        
+        Return ONLY valid JSON.
+        No explanation.
+        No markdown.
+        No extra text.
+        
+        Format exactly like this:
+        {{
+          "skills": ["skill1", "skill2"],
+          "experience_years": 3.0 
+        }}
+        
+        If experience is not mentioned, return 0.0.
+        If no skills found, return an empty list.
+        
+        Job Description:
+        \"\"\"{self.raw_text}\"\"\"
+        """
+
+        try:
+            response = self.client.chat.completions.create(
+                model="qwen/qwen3-32b",
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": "You extract structured job requirement information."},
+                    {"role": "user", "content": prompt}
+                ],
+                reasoning_effort="none"
+            )
+
+            output_text = response.choices[0].message.content.strip()
+            result = json.loads(output_text)
+
+            skills = result.get("skills", [])
+            experience = result.get("experience_years", 0)
+
+            if not isinstance(skills, list):
+                skills = []
+
+            if not isinstance(experience, (int, float)):
+                experience = 0
+
+            self.skills = [canonicalize_skill(normalize_skill(s)) for s in skills]
+            self.required_experience = round(float(experience), 1)
+
+            print("✅ Job Description processed successfully!")
+            print("Extracted skills:", self.skills)
+            print("Required experience (years):", self.required_experience)
+
+        except Exception as e:
+            print("❌ Error processing Job Description:", str(e))
+            self.skills = []
+            self.required_experience = 0
+       
+
+class Resume:
+    def __init__(self, name, skills, experience):
+        self.name = name
+        self.skills = skills
+        self.experience = experience
+        self.score = 0.0
+        self.skill_match_pct = 0.0  # initialize
+        self.exp_score_pct = 0.0    # initialize
+        # NEW: transparency fields
+        self.matched_skills = []
+        self.missing_skills = []
+
+class ResumeRankingSystem:
+    def __init__(self):
+        self.job = None
+        self.resumes = []
+    def process_resumes(self, paths: list):
+        if self.job is None:
+            print("❌ Please insert a Job Description first!")
+            return
+    
+        if not paths:
+            print("❌ No valid paths entered.")
+            return
+    
+        for path in paths:
+            if not os.path.isfile(path):
+                print(f"❌ File not found: {path}")
+                continue
+        
+            try:
+                # Extract text from PDF
+                doc = fitz.open(path)
+                text = ""
+                for page in doc:
+                    text += page.get_text()
+                doc.close()
+        
+                # Clean text
+                text_clean = re.sub(r'\s+', ' ', text).strip()
+        
+                prompt = f"""
+                        Extract ONLY:
+                        1. All technical skills (from Skills section and project tools mentioned in the resume).
+                        2. Total professional experience in years (decimal allowed, e.g., 2.5 for 2 years 6 months).
+                        
+                        Return ONLY valid JSON in this exact format:
+                        {{
+                            "skills": ["skill1", "skill2"],
+                            "experience_years": 0.0
+                        }}
+                        
+                        NO explanations, NO markdown, NO extra text, NO thoughts.
+                        
+                        Resume text:
+                    \"\"\"{text_clean}\"\"\"
+                    """
+        
+                response = self.job.client.chat.completions.create(
+                    model="qwen/qwen3-32b",
+                    temperature=0,
+                    messages=[
+                        {"role": "system", "content": "Extract structured resume info."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    reasoning_effort="none"
+                )
+        
+                output_text = response.choices[0].message.content.strip()
+        
+                output_text = re.sub(r"<think>.*?</think>", "", output_text, flags=re.DOTALL).strip()
+        
+                if not output_text.startswith("{"):
+                    raise ValueError("AI output is not valid JSON. Check the model response.")
+        
+                result = json.loads(output_text)
+        
+                skills = [canonicalize_skill(normalize_skill(s)) for s in result.get("skills", [])]
+                experience = result.get("experience_years", 0)
+                try:
+                    experience = round(float(experience), 1)
+                except:
+                    experience = 0.0
+        
+                resume_name = os.path.basename(path)
+                self.resumes.append(
+                    Resume(name=resume_name, skills=skills, experience=experience)
+                )
+        
+                print(f"✅ Processed: {resume_name}")
+                print(f"   Skills: {skills}")
+                print(f"   Experience: {experience} years")
+        
+            except Exception as e:
+                print(f"❌ Error processing {path}: {e}")
+    # Inside ResumeRankingSystem class
+
+    def calculate_scores(self):
+        if self.job is None:
+            raise ValueError("Please insert a Job Description first!")
+    
+        if not self.resumes:
+            raise ValueError("No resumes to score!")
+    
+        for resume in self.resumes:
+            required_skills = set(self.job.skills)
+            candidate_skills = set(resume.skills)
+            
+            matched_skills = required_skills.intersection(candidate_skills)
+            missing_skills = required_skills - matched_skills
+            
+            skill_match_pct = (
+                len(matched_skills) / len(required_skills) * 100
+                if required_skills else 0
+            )
+    
+            if self.job.required_experience > 0:
+                exp_ratio = resume.experience / self.job.required_experience
+                exp_score_pct = min(exp_ratio * 100, 100)
+            else:
+                exp_score_pct = 0.0
+    
+            final_score = skill_match_pct * 0.7 + exp_score_pct * 0.3
+    
+            resume.skill_match_pct = round(skill_match_pct, 1)
+            resume.exp_score_pct = round(exp_score_pct, 1)
+            resume.score = round(final_score, 1)
+    
+            resume.matched_skills = list(matched_skills)
+            resume.missing_skills = list(missing_skills)
+    
+        self.resumes.sort(
+            key=lambda r: (r.score, r.skill_match_pct, r.exp_score_pct),
+            reverse=True
         )
-        if st.button("⬅️ Back to Job/Resume Page"):
-           st.session_state.current_page = "jd_upload"
-           st.rerun()
+    
+        return self.resumes
+    
+    def show_sorted_results(self):
+        if not self.resumes:
+            print("❌ No resumes to display!")
+            return
+    
+        print("\n--- Ranked Candidates ---")
+        for i, r in enumerate(self.resumes):
+            print(f"{i+1}. {r.name} | Final Score: {r.score} | Skill Match: {r.skill_match_pct}% | Experience: {r.exp_score_pct}%")
+            print(f"   Matched Skills: {r.matched_skills}")
+            print(f"   Missing Skills: {r.missing_skills}")
+        
+    def reset_system(self):
+        self.job = None
+        self.resumes = []
+        print("✅ System reset: Job Description and all resumes cleared.")
